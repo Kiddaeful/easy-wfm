@@ -50,6 +50,7 @@ async function signIn(email, password) {
     // auth_type: 'header' signifie qu'on veut un token JWT, pas de session cookie
     const response = await fetch(`${API_BASE_URL}/auth/signin`, {
       method: 'POST',
+      credentials: 'omit',
       headers: {
         'Content-Type': 'application/json',
         'Platform': 'chrome_extension',
@@ -214,7 +215,8 @@ async function authenticatedRequest(endpoint, options = {}) {
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
-    headers
+    headers,
+    credentials: 'omit'
   });
 
   checkRateLimit(response);
@@ -250,6 +252,7 @@ async function getRivenItems() {
   try {
     const response = await fetch(`${API_BASE_URL}/riven/items`, {
       method: 'GET',
+      credentials: 'omit',
       headers: {
         'Language': 'en' // Par défaut en anglais pour matcher l'OCR qui est souvent en anglais sur Warframe
       }
@@ -277,6 +280,7 @@ async function getRivenAttributes() {
   try {
     const response = await fetch(`${API_BASE_URL}/riven/attributes`, {
       method: 'GET',
+      credentials: 'omit',
       headers: {
         'Language': 'en' // Par défaut en anglais
       }
@@ -318,6 +322,7 @@ async function searchAuctions(params) {
 
     const response = await fetch(`${API_BASE_URL}/auctions/search?type=riven&${queryParams.toString()}`, {
       method: 'GET',
+      credentials: 'omit',
       headers: {
         'Language': 'en'
       }
@@ -400,6 +405,7 @@ async function getProfileAuctions(slug) {
   try {
     const response = await fetch(`${API_BASE_URL}/profile/${slug}/auctions`, {
       method: 'GET',
+      credentials: 'omit',
       headers: {
         'Language': 'en'
       }

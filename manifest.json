@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Riven reader",
   "version": "1.0.0",
-  "description": "Extension Chrome pour le marché Riven",
+  "description": "Extension Chrome for Riven on Warframe Market",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
