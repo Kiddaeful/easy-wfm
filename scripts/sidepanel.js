@@ -112,6 +112,9 @@ async function showMainPage() {
   if (window.initRivensTab) {
     window.initRivensTab();
   }
+  if (window.initOrdersTab) {
+    window.initOrdersTab();
+  }
 }
 
 /**
@@ -253,6 +256,9 @@ function switchTab(tabName) {
     // Refresh specific tab content
     if (tabName === 'rivens' && window.refreshRivensTab) {
       window.refreshRivensTab();
+    }
+    if (tabName === 'orders' && window.refreshOrdersTab) {
+      window.refreshOrdersTab();
     }
   }
 }

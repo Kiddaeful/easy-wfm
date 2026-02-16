@@ -1,0 +1,244 @@
+// Module for "Orders" tab
+
+// Cache for orders in memory
+let ordersCache = null;
+
+/**
+ * Initializes the Orders tab
+ */
+export function initOrdersTab() {
+  console.log('Orders tab initialized');
+}
+
+/**
+ * Refreshes the Orders tab content
+ * @param {boolean} forceRefresh - If true, forces a reload from API even if cache exists
+ */
+export async function refreshOrdersTab(forceRefresh = false) {
+  const container = document.getElementById('ordersTab');
+  if (!container) return;
+
+  // Use cache if available and not forcing refresh
+  if (!forceRefresh && ordersCache) {
+    console.log('Using cached orders');
+    renderOrders(container, ordersCache);
+    return;
+  }
+
+  container.innerHTML = '<div style="text-align:center; padding: 20px;">Loading your orders... ⏳</div>';
+
+  try {
+    const orders = await window.WarframeAPI.getUserOrders();
+    
+    // Store in cache
+    ordersCache = orders;
+    
+    renderOrders(container, orders);
+
+  } catch (error) {
+    console.error('Error loading orders:', error);
+    container.innerHTML = `<div style="text-align:center; padding: 20px; color: red;">Error loading orders: ${error.message}</div>`;
+  }
+}
+
+/**
+ * Renders the orders list
+ */
+function renderOrders(container, orders) {
+  container.innerHTML = '';
+  
+  if (orders.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding: 20px; color: #666;">No active orders.</div>';
+    return;
+  }
+
+  // Header with refresh button
+  const headerContainer = document.createElement('div');
+  headerContainer.style.display = 'flex';
+  headerContainer.style.justifyContent = 'space-between';
+  headerContainer.style.alignItems = 'center';
+  headerContainer.style.padding = '10px 10px 0 10px';
+  
+  const header = document.createElement('div');
+  header.style.fontWeight = 'bold';
+  header.textContent = `Your orders (${orders.length})`;
+  headerContainer.appendChild(header);
+
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'btn btn-secondary btn-sm';
+  refreshBtn.innerHTML = '🔄 Refresh';
+  refreshBtn.style.fontSize = '12px';
+  refreshBtn.onclick = () => refreshOrdersTab(true);
+  headerContainer.appendChild(refreshBtn);
+  
+  container.appendChild(headerContainer);
+
+  // Orders list
+  const list = document.createElement('div');
+  list.style.display = 'flex';
+  list.style.flexDirection = 'column';
+  list.style.gap = '10px';
+  list.style.padding = '10px';
+  container.appendChild(list);
+
+  // Create cards immediately with loading state, then load data asynchronously
+  for (const order of orders) {
+    const orderCard = createOrderCardSkeleton(order);
+    list.appendChild(orderCard);
+    
+    // Load card data asynchronously (don't await)
+    loadOrderCardData(orderCard, order);
+  }
+}
+
+/**
+ * Creates an order card skeleton with loading state
+ */
+function createOrderCardSkeleton(order) {
+  const card = document.createElement('div');
+  card.className = 'order-card';
+  card.style.border = '1px solid #e5e7eb';
+  card.style.borderRadius = '8px';
+  card.style.padding = '12px';
+  card.style.backgroundColor = 'white';
+
+  // Item name (loading)
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'order-card-name';
+  nameDiv.style.fontWeight = 'bold';
+  nameDiv.style.fontSize = '16px';
+  nameDiv.style.marginBottom = '8px';
+  nameDiv.style.color = '#999';
+  nameDiv.innerHTML = '⏳ Loading item...';
+  card.appendChild(nameDiv);
+
+  // First line: Your price / Minimum price
+  const priceLineDiv = document.createElement('div');
+  priceLineDiv.style.display = 'grid';
+  priceLineDiv.style.gridTemplateColumns = '1fr 1fr';
+  priceLineDiv.style.gap = '8px';
+  priceLineDiv.style.fontSize = '14px';
+  priceLineDiv.style.marginBottom = '8px';
+
+  // Your price
+  const priceLabel = document.createElement('div');
+  priceLabel.style.color = '#666';
+  priceLabel.textContent = 'Your price:';
+  const priceValue = document.createElement('div');
+  priceValue.textContent = `${order.platinum} 💎`;
+  priceValue.style.fontWeight = 'bold';
+
+  // Min market price (loading)
+  const minPriceLabel = document.createElement('div');
+  minPriceLabel.style.color = '#666';
+  minPriceLabel.textContent = 'Market min:';
+  const minPriceValue = document.createElement('div');
+  minPriceValue.className = 'order-card-min-price';
+  minPriceValue.style.color = '#999';
+  minPriceValue.innerHTML = '⏳ Loading...';
+
+  priceLineDiv.appendChild(priceLabel);
+  priceLineDiv.appendChild(minPriceLabel);
+  priceLineDiv.appendChild(priceValue);
+  priceLineDiv.appendChild(minPriceValue);
+  card.appendChild(priceLineDiv);
+
+  // Second line: Rank / Type
+  const infoLineDiv = document.createElement('div');
+  infoLineDiv.style.display = 'grid';
+  infoLineDiv.style.gridTemplateColumns = '1fr 1fr';
+  infoLineDiv.style.gap = '8px';
+  infoLineDiv.style.fontSize = '14px';
+
+  // Rank
+  const rankLabel = document.createElement('div');
+  rankLabel.style.color = '#666';
+  rankLabel.textContent = 'Rank:';
+  const rankValue = document.createElement('div');
+  rankValue.textContent = order.rank !== undefined ? order.rank : 'N/A';
+
+  // Type
+  const typeLabel = document.createElement('div');
+  typeLabel.style.color = '#666';
+  typeLabel.textContent = 'Type:';
+  const typeValue = document.createElement('div');
+  typeValue.textContent = order.type.toUpperCase();
+  typeValue.style.color = order.type === 'sell' ? '#10b981' : '#3b82f6';
+
+  infoLineDiv.appendChild(rankLabel);
+  infoLineDiv.appendChild(typeLabel);
+  infoLineDiv.appendChild(rankValue);
+  infoLineDiv.appendChild(typeValue);
+  card.appendChild(infoLineDiv);
+
+  return card;
+}
+
+/**
+ * Loads data for an order card asynchronously
+ */
+async function loadOrderCardData(card, order) {
+  const nameDiv = card.querySelector('.order-card-name');
+  const minPriceDiv = card.querySelector('.order-card-min-price');
+
+  try {
+    // Load item name
+    try {
+      const itemData = await window.WarframeAPI.getItemBySlug(order.itemId);
+      console.log('Item data:', itemData);
+      const itemName = itemData.data?.i18n?.en?.name || 'Unknown Item';
+      nameDiv.textContent = itemName;
+      nameDiv.style.color = ''; // Reset color
+    } catch (error) {
+      console.error('Error loading item name:', error);
+      nameDiv.textContent = `Item ${order.itemId}`;
+      nameDiv.style.color = '#ef4444';
+    }
+
+    // Load minimum price
+    try {
+      const itemOrders = await window.WarframeAPI.getItemOrders(order.itemId);
+      const minPrice = findMinimumPrice(itemOrders.data, order.type);
+
+      if (minPrice !== null) {
+        minPriceDiv.textContent = `${minPrice} 💎`;
+        // Highlight if user's price is competitive
+        if (order.type === 'sell' && order.platinum <= minPrice) {
+          minPriceDiv.style.color = '#10b981'; // Green = competitive
+        } else if (order.type === 'buy' && order.platinum >= minPrice) {
+          minPriceDiv.style.color = '#10b981';
+        } else {
+          minPriceDiv.style.color = '#ef4444'; // Red = not competitive
+        }
+      } else {
+        minPriceDiv.textContent = 'N/A';
+        minPriceDiv.style.color = '#999';
+      }
+    } catch (error) {
+      console.error('Error loading minimum price:', error);
+      minPriceDiv.textContent = 'Error';
+      minPriceDiv.style.color = '#ef4444';
+    }
+
+  } catch (error) {
+    console.error('Error loading order card data:', error);
+  }
+}
+
+/**
+ * Finds minimum price from order data
+ */
+function findMinimumPrice(orders, orderType) {
+  if (!orders || orders.length === 0) return null;
+
+  // Filter by same type (sell orders if user is selling, buy orders if user is buying)
+  const relevantOrders = orders.filter(
+    o => o.type === orderType && o.visible && o.user.status === 'ingame'
+  );
+  
+  if (relevantOrders.length === 0) return null;
+
+  // Find minimum platinum price
+  const prices = relevantOrders.map(o => o.platinum);
+  return Math.min(...prices);
+}

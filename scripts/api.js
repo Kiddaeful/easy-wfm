@@ -1,6 +1,56 @@
 // Module API pour Warframe Market (API v1 - Simple Login)
 
 const API_BASE_URL = 'https://api.warframe.market/v1';
+const API_V2_BASE_URL = 'https://api.warframe.market/v2';
+
+// Request Queue System
+class RequestQueue {
+  constructor(maxRequestsPerSecond = 3) {
+    this.queue = [];
+    this.maxRPS = maxRequestsPerSecond;
+    this.lastRequestTime = 0;
+    this.processing = false;
+  }
+
+  async add(requestFn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ requestFn, resolve, reject });
+      this.process();
+    });
+  }
+
+  async process() {
+    if (this.processing || this.queue.length === 0) return;
+    
+    this.processing = true;
+    
+    while (this.queue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+      const minDelay = 1000 / this.maxRPS;
+      
+      if (timeSinceLastRequest < minDelay) {
+        await new Promise(resolve => 
+          setTimeout(resolve, minDelay - timeSinceLastRequest)
+        );
+      }
+      
+      const { requestFn, resolve, reject } = this.queue.shift();
+      this.lastRequestTime = Date.now();
+      
+      try {
+        const result = await requestFn();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+    }
+    
+    this.processing = false;
+  }
+}
+
+const requestQueue = new RequestQueue(3);
 
 /**
  * Checks for rate limiting and displays a toast if necessary
@@ -199,8 +249,9 @@ async function signOut() {
  * Effectue une requête API authentifiée
  * @param {string} endpoint - Endpoint de l'API
  * @param {Object} options - Options de la requête fetch
+ * @param {string} baseUrl - Base URL de l'API (par défaut API_BASE_URL)
  */
-async function authenticatedRequest(endpoint, options = {}) {
+async function authenticatedRequest(endpoint, options = {}, baseUrl = API_BASE_URL) {
   const token = await getAuthToken();
   
   if (!token) {
@@ -209,11 +260,11 @@ async function authenticatedRequest(endpoint, options = {}) {
 
   const headers = {
     'Content-Type': 'application/json',
-    'Authorization': token,
+    'Authorization': (baseUrl == API_V2_BASE_URL ? token.replace('JWT', 'Bearer') : token) || '',
     ...options.headers
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers,
     credentials: 'omit'
@@ -425,6 +476,69 @@ async function getProfileAuctions(slug) {
   }
 }
 
+/**
+ * Get user orders (not auctions) - API v2
+ * @returns {Promise<Array>} Liste des commandes
+ */
+async function getUserOrders() {
+  return requestQueue.add(async () => {
+    const response = await authenticatedRequest('/orders/my', {
+      method: 'GET'
+    }, API_V2_BASE_URL);
+    return response.data || [];
+  });
+}
+
+/**
+ * Get item information by slug - API v2
+ * @param {string} slug - Item slug
+ * @returns {Promise<Object>} Item information
+ */
+async function getItemBySlug(slug) {
+  return requestQueue.add(async () => {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_V2_BASE_URL}/item/${slug}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token || '',
+        'Language': 'en'
+      },
+      credentials: 'omit'
+    });
+    
+    checkRateLimit(response);
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    
+    return await response.json();
+  });
+}
+
+/**
+ * Get orders for a specific item to find minimum price - API v2
+ * @param {string} slug - Item slug
+ * @returns {Promise<Object>} Item orders
+ */
+async function getItemOrders(slug) {
+  return requestQueue.add(async () => {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_V2_BASE_URL}/orders/item/${slug}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token || '',
+        'Language': 'en'
+      },
+      credentials: 'omit'
+    });
+    
+    checkRateLimit(response);
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    
+    return await response.json();
+  });
+}
+
 // Exporter les fonctions pour utilisation dans d'autres scripts
 window.WarframeAPI = {
   signIn,
@@ -439,5 +553,8 @@ window.WarframeAPI = {
   createAuction,
   updateAuction,
   closeAuction,
-  getProfileAuctions
+  getProfileAuctions,
+  getUserOrders,
+  getItemBySlug,
+  getItemOrders
 };
