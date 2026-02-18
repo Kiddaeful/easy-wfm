@@ -12,11 +12,17 @@ class RequestQueue {
     this.processing = false;
   }
 
-  async add(requestFn) {
+  async add(requestFn, tag = null) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ requestFn, resolve, reject });
+      this.queue.push({ requestFn, resolve, reject, tag });
       this.process();
     });
+  }
+
+  removeByTag(tag) {
+    const toRemove = this.queue.filter(item => item.tag === tag);
+    this.queue = this.queue.filter(item => item.tag !== tag);
+    toRemove.forEach(({ reject }) => reject(new Error('Cancelled')));
   }
 
   async process() {
@@ -34,7 +40,10 @@ class RequestQueue {
           setTimeout(resolve, minDelay - timeSinceLastRequest)
         );
       }
-      
+
+      // Queue may have been emptied by removeByTag during the await above
+      if (this.queue.length === 0) break;
+
       const { requestFn, resolve, reject } = this.queue.shift();
       this.lastRequestTime = Date.now();
       
@@ -515,6 +524,22 @@ async function getItemBySlug(slug) {
 }
 
 /**
+ * Update an order's platinum price - API v2
+ * @param {string} orderId - Order ID
+ * @param {number} platinum - New platinum value
+ * @param {string} [tag] - Optional queue tag for cancellation
+ * @returns {Promise<Object>} Updated order
+ */
+async function updateOrder(orderId, platinum, tag = 'stay-updated') {
+  return requestQueue.add(async () => {
+    return authenticatedRequest(`/order/${orderId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ platinum })
+    }, API_V2_BASE_URL);
+  }, tag);
+}
+
+/**
  * Get orders for a specific item to find minimum price - API v2
  * @param {string} slug - Item slug
  * @returns {Promise<Object>} Item orders
@@ -556,5 +581,7 @@ window.WarframeAPI = {
   getProfileAuctions,
   getUserOrders,
   getItemBySlug,
-  getItemOrders
+  getItemOrders,
+  updateOrder,
+  requestQueue
 };

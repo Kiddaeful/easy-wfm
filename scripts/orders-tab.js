@@ -3,6 +3,44 @@
 // Cache for orders in memory
 let ordersCache = null;
 
+// Stay Updated task state
+let stayUpdatedActive = false;
+let stayUpdatedLoopRunning = false;
+
+/**
+ * Continuously refreshes all orders by PATCHing each one with its current platinum price.
+ * Loops until stayUpdatedActive is set to false.
+ */
+async function runStayUpdatedLoop() {
+  if (stayUpdatedLoopRunning) return;
+  stayUpdatedLoopRunning = true;
+
+  while (stayUpdatedActive) {
+    if (!ordersCache || ordersCache.length === 0) break;
+
+    for (const order of ordersCache) {
+      if (!stayUpdatedActive) break;
+      try {
+        await window.WarframeAPI.updateOrder(order.id, order.platinum, 'stay-updated');
+      } catch (err) {
+        if (err.message !== 'Cancelled') {
+          console.error('Stay Updated: error refreshing order', order.id, err);
+        }
+      }
+    }
+  }
+
+  stayUpdatedLoopRunning = false;
+}
+
+/**
+ * Stops the Stay Updated task and removes queued calls
+ */
+function stopStayUpdated() {
+  stayUpdatedActive = false;
+  window.WarframeAPI.requestQueue.removeByTag('stay-updated');
+}
+
 /**
  * Initializes the Orders tab
  */
@@ -70,6 +108,35 @@ function renderOrders(container, orders) {
   refreshBtn.style.fontSize = '12px';
   refreshBtn.onclick = () => refreshOrdersTab(true);
   headerContainer.appendChild(refreshBtn);
+
+  const stayUpdatedBtn = document.createElement('button');
+  stayUpdatedBtn.className = stayUpdatedActive ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+  stayUpdatedBtn.style.fontSize = '12px';
+  stayUpdatedBtn.style.marginLeft = '6px';
+
+  function updateStayUpdatedBtn() {
+    if (stayUpdatedActive) {
+      stayUpdatedBtn.innerHTML = '⟳ Stay Updated';
+      stayUpdatedBtn.className = 'btn btn-primary btn-sm';
+    } else {
+      stayUpdatedBtn.innerHTML = 'Stay Updated';
+      stayUpdatedBtn.className = 'btn btn-secondary btn-sm';
+    }
+  }
+
+  updateStayUpdatedBtn();
+
+  stayUpdatedBtn.onclick = () => {
+    if (stayUpdatedActive) {
+      stopStayUpdated();
+      updateStayUpdatedBtn();
+    } else {
+      stayUpdatedActive = true;
+      updateStayUpdatedBtn();
+      runStayUpdatedLoop();
+    }
+  };
+  headerContainer.appendChild(stayUpdatedBtn);
   
   container.appendChild(headerContainer);
 
@@ -125,6 +192,7 @@ function createOrderCardSkeleton(order) {
   priceLabel.style.color = '#666';
   priceLabel.textContent = 'Your price:';
   const priceValue = document.createElement('div');
+  priceValue.className = 'order-card-your-price';
   priceValue.textContent = `${order.platinum} 💎`;
   priceValue.style.fontWeight = 'bold';
 
@@ -171,6 +239,16 @@ function createOrderCardSkeleton(order) {
   infoLineDiv.appendChild(typeValue);
   card.appendChild(infoLineDiv);
 
+  // Set to min button (disabled until min price is loaded)
+  const setToMinBtn = document.createElement('button');
+  setToMinBtn.className = 'btn btn-secondary btn-sm order-card-set-to-min';
+  setToMinBtn.style.marginTop = '10px';
+  setToMinBtn.style.fontSize = '12px';
+  setToMinBtn.style.width = '100%';
+  setToMinBtn.textContent = 'Set to min';
+  setToMinBtn.disabled = true;
+  card.appendChild(setToMinBtn);
+
   return card;
 }
 
@@ -180,6 +258,8 @@ function createOrderCardSkeleton(order) {
 async function loadOrderCardData(card, order) {
   const nameDiv = card.querySelector('.order-card-name');
   const minPriceDiv = card.querySelector('.order-card-min-price');
+  const yourPriceDiv = card.querySelector('.order-card-your-price');
+  const setToMinBtn = card.querySelector('.order-card-set-to-min');
 
   try {
     // Load item name
@@ -210,6 +290,25 @@ async function loadOrderCardData(card, order) {
         } else {
           minPriceDiv.style.color = '#ef4444'; // Red = not competitive
         }
+
+        // Enable "Set to min" button
+        setToMinBtn.disabled = false;
+        setToMinBtn.onclick = async () => {
+          setToMinBtn.disabled = true;
+          setToMinBtn.textContent = '⏳ Updating...';
+          try {
+            await window.WarframeAPI.updateOrder(order.id, minPrice, 'set-to-min');
+            order.platinum = minPrice;
+            yourPriceDiv.textContent = `${minPrice} 💎`;
+            minPriceDiv.style.color = '#10b981';
+            setToMinBtn.textContent = 'Set to min';
+            setToMinBtn.disabled = false;
+          } catch (err) {
+            console.error('Error setting to min price:', err);
+            setToMinBtn.textContent = 'Error — retry';
+            setToMinBtn.disabled = false;
+          }
+        };
       } else {
         minPriceDiv.textContent = 'N/A';
         minPriceDiv.style.color = '#999';
