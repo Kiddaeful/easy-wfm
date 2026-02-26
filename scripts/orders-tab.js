@@ -264,9 +264,13 @@ async function loadOrderCardData(card, order) {
   try {
     // Load item name
     try {
-      const itemData = await window.WarframeAPI.getItemBySlug(order.itemId);
+      const [itemData, language] = await Promise.all([
+        window.WarframeAPI.getItemBySlug(order.itemId),
+        window.WarframeAPI.getLanguage()
+      ]);
       console.log('Item data:', itemData);
-      const itemName = itemData.data?.i18n?.en?.name || 'Unknown Item';
+      const i18n = itemData.data?.i18n;
+      const itemName = i18n?.[language]?.name || i18n?.en?.name || 'Unknown Item';
       nameDiv.textContent = itemName;
       nameDiv.style.color = ''; // Reset color
     } catch (error) {

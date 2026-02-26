@@ -408,6 +408,34 @@ main {
   font-size: 14px;
 }
 
+/* Language Selector */
+.language-selector {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(102, 126, 234, 0.1);
+  border: 1.5px solid rgba(102, 126, 234, 0.4);
+  border-radius: 6px;
+  color: #667eea;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  min-width: 44px;
+}
+
+.language-selector:hover {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: #667eea;
+}
+
+.language-selector:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
 /* Tabs */
 .tabs {
   display: flex;

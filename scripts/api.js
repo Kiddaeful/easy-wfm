@@ -75,6 +75,28 @@ function checkRateLimit(response) {
 }
 
 /**
+ * Retrieves the selected language from storage (defaults to 'en')
+ * @returns {Promise<string>} Language code
+ */
+async function getLanguage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['language'], (result) => {
+      resolve(result.language || 'en');
+    });
+  });
+}
+
+/**
+ * Saves the selected language to storage
+ * @param {string} lang - Language code
+ */
+async function setLanguage(lang) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ language: lang }, resolve);
+  });
+}
+
+/**
  * Génère ou récupère un deviceId unique
  */
 async function getDeviceId() {
@@ -310,11 +332,12 @@ async function getUserInfo() {
  */
 async function getRivenItems() {
   try {
+    const language = await getLanguage();
     const response = await fetch(`${API_BASE_URL}/riven/items`, {
       method: 'GET',
       credentials: 'omit',
       headers: {
-        'Language': 'en' // Par défaut en anglais pour matcher l'OCR qui est souvent en anglais sur Warframe
+        'Language': language
       }
     });
 
@@ -338,11 +361,12 @@ async function getRivenItems() {
  */
 async function getRivenAttributes() {
   try {
+    const language = await getLanguage();
     const response = await fetch(`${API_BASE_URL}/riven/attributes`, {
       method: 'GET',
       credentials: 'omit',
       headers: {
-        'Language': 'en' // Par défaut en anglais
+        'Language': language
       }
     });
 
@@ -380,11 +404,12 @@ async function searchAuctions(params) {
       }
     }
 
+    const language = await getLanguage();
     const response = await fetch(`${API_BASE_URL}/auctions/search?type=riven&${queryParams.toString()}`, {
       method: 'GET',
       credentials: 'omit',
       headers: {
-        'Language': 'en'
+        'Language': language
       }
     });
 
@@ -463,11 +488,12 @@ async function closeAuction(auctionId) {
  */
 async function getProfileAuctions(slug) {
   try {
+    const language = await getLanguage();
     const response = await fetch(`${API_BASE_URL}/profile/${slug}/auctions`, {
       method: 'GET',
       credentials: 'omit',
       headers: {
-        'Language': 'en'
+        'Language': language
       }
     });
 
@@ -505,13 +531,13 @@ async function getUserOrders() {
  */
 async function getItemBySlug(slug) {
   return requestQueue.add(async () => {
-    const token = await getAuthToken();
+    const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/item/${slug}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token || '',
-        'Language': 'en'
+        'Language': language
       },
       credentials: 'omit'
     });
@@ -546,13 +572,13 @@ async function updateOrder(orderId, platinum, tag = 'stay-updated') {
  */
 async function getItemOrders(slug) {
   return requestQueue.add(async () => {
-    const token = await getAuthToken();
+    const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/orders/item/${slug}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': token || '',
-        'Language': 'en'
+        'Language': language
       },
       credentials: 'omit'
     });
@@ -572,6 +598,8 @@ window.WarframeAPI = {
   getAuthToken,
   authenticatedRequest,
   getUserInfo,
+  getLanguage,
+  setLanguage,
   getRivenItems,
   getRivenAttributes,
   searchAuctions,

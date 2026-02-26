@@ -63,10 +63,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Logout button handler (in header)
   const logoutBtnHeader = document.getElementById('logoutBtnHeader');
   logoutBtnHeader.addEventListener('click', handleLogout);
+
+  // Language selector
+  await initLanguageSelector();
   
   // Tab handlers
   initTabs();
 });
+
+/**
+ * Initializes the language selector with the saved value and listens for changes
+ */
+async function initLanguageSelector() {
+  const selector = document.getElementById('languageSelector');
+  if (!selector) return;
+
+  const savedLang = await window.WarframeAPI.getLanguage();
+  selector.value = savedLang;
+
+  selector.addEventListener('change', async () => {
+    await window.WarframeAPI.setLanguage(selector.value);
+  });
+}
 
 /**
  * Checks authentication status and displays appropriate page
