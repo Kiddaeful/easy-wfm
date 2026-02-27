@@ -90,6 +90,16 @@ function renderOrders(container, orders) {
     return;
   }
 
+  // Filter input (at the very top)
+  const filterContainer = document.createElement('div');
+  filterContainer.style.padding = '10px 10px 0 10px';
+  const filterInput = document.createElement('input');
+  filterInput.type = 'text';
+  filterInput.placeholder = 'Filter by item name...';
+  filterInput.className = 'form-control form-control-sm';
+  filterContainer.appendChild(filterInput);
+  container.appendChild(filterContainer);
+
   // Header with refresh button
   const headerContainer = document.createElement('div');
   headerContainer.style.display = 'flex';
@@ -147,6 +157,17 @@ function renderOrders(container, orders) {
   list.style.gap = '10px';
   list.style.padding = '10px';
   container.appendChild(list);
+
+  filterInput.oninput = () => {
+    const query = filterInput.value.trim().toLowerCase();
+    for (const orderCard of list.querySelectorAll('.order-card')) {
+      const nameEn = orderCard.dataset.nameEn || '';
+      const nameLang = orderCard.dataset.nameLang || '';
+      const isLoaded = orderCard.dataset.loaded === 'true';
+      const matches = !query || !isLoaded || nameEn.includes(query) || nameLang.includes(query);
+      orderCard.style.display = matches ? '' : 'none';
+    }
+  };
 
   // Create cards immediately with loading state, then load data asynchronously
   for (const order of orders) {
@@ -270,13 +291,35 @@ async function loadOrderCardData(card, order) {
       ]);
       console.log('Item data:', itemData);
       const i18n = itemData.data?.i18n;
-      const itemName = i18n?.[language]?.name || i18n?.en?.name || 'Unknown Item';
-      nameDiv.textContent = itemName;
-      nameDiv.style.color = ''; // Reset color
+      const localName = i18n?.[language]?.name;
+      const enName = i18n?.en?.name || 'Unknown Item';
+      const displayName = localName || enName;
+
+      nameDiv.innerHTML = '';
+      nameDiv.style.color = '';
+
+      const mainSpan = document.createElement('span');
+      mainSpan.textContent = language !== 'en' ? `${language.toUpperCase()}: ${displayName}` : displayName;
+      nameDiv.appendChild(mainSpan);
+
+      if (language !== 'en') {
+        const enDiv = document.createElement('div');
+        enDiv.textContent = `EN: ${enName}`;
+        enDiv.style.fontSize = '11px';
+        enDiv.style.fontWeight = 'normal';
+        enDiv.style.color = '#888';
+        enDiv.style.marginTop = '2px';
+        nameDiv.appendChild(enDiv);
+      }
+
+      card.dataset.nameEn = enName.toLowerCase();
+      card.dataset.nameLang = displayName.toLowerCase();
+      card.dataset.loaded = 'true';
     } catch (error) {
       console.error('Error loading item name:', error);
       nameDiv.textContent = `Item ${order.itemId}`;
       nameDiv.style.color = '#ef4444';
+      card.dataset.loaded = 'true';
     }
 
     // Load minimum price
