@@ -4,6 +4,27 @@ export const similarAttributes = [
   ['critical_chance', 'critical_damage', 'base_damage_/_melee_damage', 'multishot', 'status_chance'],
 ];
 
+export const goodAttributes = [
+  'critical_chance',
+  'critical_damage',
+  'base_damage_/_melee_damage',
+  'multishot',
+  'status_chance',
+  'toxin_damage',
+  'heat_damage',
+  'electric_damage',
+  'cold_damage'
+];
+
+export const badNegativeAttributes = [
+  'critical_chance',
+  'critical_damage',
+  'base_damage_/_melee_damage',
+  'multishot',
+  'status_chance',
+  'status_duration'
+];
+
 /**
  * Generates search queries for finding similar Rivens
  * @param {Object} data - The Riven data from the form
@@ -21,8 +42,8 @@ export function generateSimilarRivenQueries(data, knownWeapons) {
     return [];
   }
 
-  // Special case for Unrolled Rivens (rolls = 0)
-  // If user selected "unrolled", we ignore attributes and search for unrolled rivens only
+  // Special case for Trash Rivens
+  // If user selected "trash", we ignore attributes and search for cheapest price only
   if (data.rolls === 0) {
     return [{
       weapon_url_name: weapon.url_name,
@@ -31,7 +52,7 @@ export function generateSimilarRivenQueries(data, knownWeapons) {
       platform: 'pc',
       polarity: 'any',
       re_rolls_max: 0,
-      _label: 'Unrolled'
+      _label: 'Trash'
     }];
   }
 

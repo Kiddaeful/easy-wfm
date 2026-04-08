@@ -49,6 +49,8 @@ riven-parser/
 - **Riven Reader**: Extract data from Riven mods (Weapon, Stats, MR, Rolls, Polarity)
 - **Find similar rivens**: Find similar rivens in the Warframe Market, from a new parsed Riven or from an existing auction.
 - **Create new auctions**: Create new auctions in the Warframe Market using the Riven data parsed.
+- **Orders tab**: See all your current orders in the Warframe Market, with your price and minimum price online.
+- **Stay Updated**: Automatically update your orders to stay on top of the market.
 - **Update existing auctions**: Update existing auctions in the Warframe Market.
 - ​​**Session Management**: Automatic login and refresh tokens
 - **Auto-refresh Tokens**: Automatic refresh when the token expires

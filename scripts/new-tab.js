@@ -1,7 +1,7 @@
 // Module for "New" tab
 import { createAuctionCell } from './auction-cell.js';
 import { parseRivenData, validateRivenData, generateRivenNames } from './riven-parser.js';
-import { generateSimilarRivenQueries } from './search-queries.js';
+import { generateSimilarRivenQueries, goodAttributes, badNegativeAttributes } from './search-queries.js';
 import { preprocessImage, getTesseractConfig, cleanOCRText } from './image-processor.js';
 
 // Tesseract worker instance
@@ -519,6 +519,35 @@ function renderRivenForm(data) {
   // Create Form HTML using the helper
   const form = createRivenFormElement(data, false);
   formContainer.appendChild(form);
+
+  // Direct "Create Sale" button below the search form
+  const directSaleBtn = document.createElement('button');
+  directSaleBtn.type = 'button';
+  directSaleBtn.className = 'btn btn-secondary btn-block';
+  directSaleBtn.textContent = 'Create Sale directly';
+  directSaleBtn.style.marginTop = '8px';
+  directSaleBtn.onclick = () => {
+    const currentData = getFormDataFromDOM(form);
+    if (currentData) {
+      openSaleModal(currentData);
+    }
+  };
+  formContainer.appendChild(directSaleBtn);
+}
+
+/**
+ * Returns true if a riven should be considered "trash" based on its attributes:
+ * - Any positive attribute is not in the goodAttributes list, OR
+ * - The negative attribute is in the badNegativeAttributes list
+ * @param {Object} data - Riven data with stats array
+ * @returns {boolean}
+ */
+function isTrashRiven(data) {
+  const positiveStats = (data.stats || []).filter(s => s.type === 'positive' && s.matchedAttribute);
+  const negativeStats = (data.stats || []).filter(s => s.type === 'negative' && s.matchedAttribute);
+  const hasNonGoodPositive = positiveStats.some(s => !goodAttributes.includes(s.matchedAttribute.url_name));
+  const hasBadNegative = negativeStats.some(s => badNegativeAttributes.includes(s.matchedAttribute.url_name));
+  return hasNonGoodPositive || hasBadNegative;
 }
 
 /**
@@ -784,7 +813,7 @@ function createRivenFormElement(data, isSaleMode = false) {
     rollsInput.name = 'rerolls';
     rollsGroup.appendChild(rollsInput);
   } else {
-    // Unrolled Checkbox for Search Mode
+    // Trash Checkbox for Search Mode
     // We need to restructure the group a bit to match the previous layout (flex row)
     rollsGroup.style.display = 'flex';
     rollsGroup.style.alignItems = 'center';
@@ -800,17 +829,31 @@ function createRivenFormElement(data, isSaleMode = false) {
 
     const rollsInput = document.createElement('input');
     rollsInput.type = 'checkbox';
-    // Logic: unchecked if 0, checked otherwise
-    rollsInput.checked = (data.rolls || 0) == 0;
+    rollsInput.checked = isTrashRiven(data);
     
     const rollsText = document.createElement('span');
-    rollsText.textContent = 'unrolled';
+    rollsText.textContent = 'trash';
     rollsText.style.marginLeft = '8px';
     rollsText.style.fontWeight = '600';
 
     rollsLabel.appendChild(rollsInput);
     rollsLabel.appendChild(rollsText);
     rollsGroup.appendChild(rollsLabel);
+
+    // Mark as manually set when user explicitly interacts with the checkbox
+    rollsInput.addEventListener('change', () => {
+      rollsInput.dataset.manuallySet = 'true';
+    });
+
+    // Re-evaluate trash status whenever attributes change, unless manually overridden
+    const updateTrashCheckbox = () => {
+      if (rollsInput.dataset.manuallySet) return;
+      const currentData = getFormDataFromDOM(form);
+      if (currentData) rollsInput.checked = isTrashRiven(currentData);
+    };
+
+    attributesContainer.addEventListener('change', updateTrashCheckbox);
+    attributesContainer.addEventListener('input', updateTrashCheckbox);
   }
   
   form.appendChild(rollsGroup);
