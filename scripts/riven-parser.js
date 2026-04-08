@@ -335,6 +335,48 @@ function getPermutations(arr) {
 }
 
 /**
+ * Joins continuation lines to the previous stat line.
+ * A continuation line is a non-empty line that:
+ *   - does NOT start with a sign (+, -, y, v) or a digit
+ *   - does NOT contain any digit (avoids swallowing footer/mastery lines)
+ *   - follows a line that itself started with a sign or digit (i.e. a stat line)
+ *
+ * This fixes multi-line OCR output like:
+ *   "+97.3% de Vitesse des\nProjectiles"  →  "+97.3% de Vitesse des Projectiles"
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function joinContinuationLines(text) {
+  const lines = text.split('\n');
+  const result = [];
+  let lastWasStat = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      result.push('');
+      lastWasStat = false;
+      continue;
+    }
+
+    const isStatStart = /^[+\-yv\d]/.test(trimmed);
+    const hasDigit = /\d/.test(trimmed);
+
+    // Only join pure-text lines that immediately follow a stat line
+    if (!isStatStart && !hasDigit && lastWasStat) {
+      result[result.length - 1] += ' ' + trimmed;
+      // lastWasStat stays true so chained continuations also get joined
+    } else {
+      result.push(trimmed);
+      lastWasStat = isStatStart;
+    }
+  }
+
+  return result.join('\n');
+}
+
+/**
  * Parses Riven mod data from OCR text
  * @param {string} text - Raw OCR text
  * @param {Array} knownWeapons - Optional list of valid weapon names to fuzzy match against
@@ -342,6 +384,8 @@ function getPermutations(arr) {
  * @returns {Object} Parsed Riven data
  */
 export function parseRivenData(text, knownWeapons = [], knownAttributes = []) {
+  // Preprocess: join continuation lines so multi-line French stat descriptions are reunited
+  text = joinContinuationLines(text);
   console.log('Parsing Riven data from text:', text);
   
   const rivenData = {
@@ -624,7 +668,9 @@ function extractStats(text, weaponNamePosition = -1) {
   // - missing %, or "/" instead of "%"
   // - missing +/- sign (treated as positive if value > 1, negative otherwise)
   // - OCR misreads of signs: "y" or "v" for "-", etc.
-  const statPattern = /([+\-yv])?\s*((?:\d+(?:[.,\s]\d+)*))\s*[%/]?\s*([a-zA-Z].+?)(?=\n|$)/gi;
+  // [^\S\n]* instead of \s* between value and stat name so the pattern never
+  // bridges two lines — e.g. "PM 10\nma ow sh ea" must NOT be captured as a stat.
+  const statPattern = /([+\-yv])?\s*((?:\d+(?:[.,\s]\d+)*))[^\S\n]*[%/]?[^\S\n]*([a-zA-Z].+?)(?=\n|$)/gi;
   
   let match;
   while ((match = statPattern.exec(text)) !== null) {
@@ -641,6 +687,11 @@ function extractStats(text, weaponNamePosition = -1) {
     if (sign === 'y' || sign === 'v') {
       sign = '-';
     }
+
+    // Strip leading French prepositions / articles that the OCR includes before the stat description.
+    // Examples: "de Vitesse des Projectiles" → "Vitesse des Projectiles"
+    //           "d'Impact" → "Impact"
+    statName = statName.replace(/^(?:de\s+|des\s+|du\s+|d'|à\s+|au\s+)/i, '').trim();
     
     // Filter 1: Skip if the statName contains a hyphen (likely weapon/riven name like "Visi-satipha")
     if (statName.includes('-')) {
@@ -780,11 +831,14 @@ function extractStats(text, weaponNamePosition = -1) {
  * @returns {number|null} Mastery rank
  */
 function extractMastery(text) {
-  // Look for patterns like "Mastery Rank 8" or "MR 8" or "Rank 8"
+  // Look for patterns like "Mastery Rank 8", "MR 8", "Rank 8"
+  // French variants: "Rang de Maîtrise 8" (RM), "Puissance Maîtrisée 8" (PM)
   const patterns = [
     /Mastery\s*Rank\s*(\d+)/i,
     /MR\s*(\d+)/i,
-    /Rank\s*(\d+)/i
+    /Rank\s*(\d+)/i,
+    /\bRM\s*(\d+)/i,  // French: Rang de Maîtrise
+    /\bPM\s*(\d+)/i,  // French: Puissance Maîtrisée (older UI)
   ];
   
   for (const pattern of patterns) {
@@ -1025,6 +1079,107 @@ export function formatRivenData(rivenData) {
 }
 
 /**
+ * French Warframe stat terms → English equivalents.
+ * Keys are already lower-cased and accent-stripped.
+ * Also covers common OCR misreads of French words.
+ */
+const FRENCH_TO_ENGLISH = {
+  // speed / rate
+  vitesse: 'speed',
+  cadence: 'rate',
+  tir: 'fire',
+  // damage
+  degats: 'damage',
+  deglto: 'damage', // frequent OCR misread of "dégâts"
+  deglt: 'damage',
+  // duration / status
+  duree: 'duration',
+  statut: 'status',
+  // critical
+  critique: 'critical',
+  critiques: 'critical',
+  // chance
+  chances: 'chance',
+  taux: 'chance',
+  // projectile
+  projectiles: 'projectile',
+  // reload
+  rechargement: 'reload',
+  // ammo / magazine
+  munitions: 'ammo',
+  capacite: 'capacity',
+  chargeur: 'magazine',
+  // damage types
+  froid: 'cold',
+  chaleur: 'heat',
+  electrique: 'electric',
+  toxine: 'toxin',
+  tranchant: 'slash',
+  perforation: 'puncture',
+  // factions
+  infestes: 'infested',
+  // misc
+  recul: 'recoil',
+  portee: 'range',
+  finisseur: 'finisher',
+  glissade: 'slide',
+  penetration: 'punch',
+  perforante: 'punch',
+  combo: 'combo',
+};
+
+/**
+ * Strips accents, lowercases and translates a single word via FRENCH_TO_ENGLISH.
+ * @param {string} word
+ * @returns {string}
+ */
+function normalizeFrenchWord(word) {
+  const lower = word.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // strip diacritics
+  return FRENCH_TO_ENGLISH[lower] || lower;
+}
+
+/**
+ * French prepositions / articles filtered from both sides of the word match to
+ * prevent false scores.  "de" is particularly problematic because it appears in
+ * many French attribute names ("Chance de gagner des Points de Combo…") yet
+ * carries no semantic meaning.
+ *
+ * Note: English prepositions like "to", "of", "on" are intentionally kept
+ * because they are semantically meaningful in English attribute names
+ * (e.g. "Damage to Grineer" vs "Base Damage").
+ */
+const MATCH_STOPWORDS = new Set([
+  'de', 'des', 'du', 'd', 'au', 'aux', 'le', 'la', 'les',
+  'un', 'une', 'et', 'ou', 'en', 'par',
+]);
+
+/**
+ * Converts a raw phrase into a list of normalised, matchable words by:
+ *   1. Stripping diacritics and lowercasing
+ *   2. Splitting on whitespace / slashes
+ *   3. Removing stopwords and single-character tokens
+ *   4. Translating French terms to English via FRENCH_TO_ENGLISH
+ *
+ * Applying this to BOTH the OCR stat name AND the attribute effect means the
+ * comparison is language-agnostic: if the API returns French effects the
+ * translation brings them to the same normalised form as the OCR text.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+function getMatchableWords(text) {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[\s/]+/)
+    .filter(w => w.length > 1 && !MATCH_STOPWORDS.has(w))
+    .map(normalizeFrenchWord);
+}
+
+/**
  * Calculates word-based match score between raw name and attribute
  * Returns number of matching words (higher is better)
  * @param {string} rawName 
@@ -1032,8 +1187,8 @@ export function formatRivenData(rivenData) {
  * @returns {number} Number of matching words
  */
 function calculateWordMatchScore(rawName, attrEffect) {
-  const rawWords = rawName.toLowerCase().split(/[\s/]+/).filter(w => w.length > 0);
-  const attrWords = attrEffect.toLowerCase().split(/[\s/]+/).filter(w => w.length > 0);
+  const rawWords = getMatchableWords(rawName);
+  const attrWords = getMatchableWords(attrEffect);
   
   let matchCount = 0;
   for (const rawWord of rawWords) {
