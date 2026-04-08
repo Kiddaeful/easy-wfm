@@ -26,6 +26,21 @@ export const badNegativeAttributes = [
 ];
 
 /**
+ * Returns true if a riven should be considered "trash" based on its attributes:
+ * - Any positive attribute is not in the goodAttributes list, OR
+ * - The negative attribute is in the badNegativeAttributes list
+ * @param {Object} data - Riven data with stats array
+ * @returns {boolean}
+ */
+export function isTrashRiven(data) {
+  const positiveStats = (data.stats || []).filter(s => s.type === 'positive' && s.matchedAttribute);
+  const negativeStats = (data.stats || []).filter(s => s.type === 'negative' && s.matchedAttribute);
+  const hasNonGoodPositive = positiveStats.some(s => !goodAttributes.includes(s.matchedAttribute.url_name));
+  const hasBadNegative = negativeStats.some(s => badNegativeAttributes.includes(s.matchedAttribute.url_name));
+  return hasNonGoodPositive || hasBadNegative;
+}
+
+/**
  * Generates search queries for finding similar Rivens
  * @param {Object} data - The Riven data from the form
  * @param {Array} knownWeapons - List of known weapons

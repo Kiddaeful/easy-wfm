@@ -18,9 +18,6 @@ export function getPrefix(text) {
     case 'critical_damage':
       return 'Acri';
     case 'base_damage_/_melee_damage':
-    case 'base_damage':
-    case 'melee_damage':
-    case 'damage':
       return 'Visi';
     case 'critical_chance_on_slide_attack':
       return 'Pleci';
@@ -106,9 +103,6 @@ export function getSuffix(text) {
     case 'critical_damage':
       return 'Tis';
     case 'base_damage_/_melee_damage':
-    case 'base_damage':
-    case 'melee_damage':
-    case 'damage':
       return 'Ata';
     case 'electric_damage':
       return 'Tio';
@@ -173,9 +167,6 @@ export function getStatBaseValue(statUrlName, weaponType) {
     'critical_chance': { rifle: 149.99, shotgun: 90, pistol: 149.99, archgun: 99.9, melee: 180 },
     'critical_chance_on_slide_attack': { rifle: null, shotgun: null, pistol: null, archgun: null, melee: 120 },
     'critical_damage': { rifle: 120, shotgun: 90, pistol: 90, archgun: 80.1, melee: 90 },
-    'base_damage': { rifle: 165, shotgun: 164.7, pistol: 219.6, archgun: 99.9, melee: 164.7 },
-    'melee_damage': { rifle: 165, shotgun: 164.7, pistol: 219.6, archgun: 99.9, melee: 164.7 },
-    'damage': { rifle: 165, shotgun: 164.7, pistol: 219.6, archgun: 99.9, melee: 164.7 },
     'base_damage_/_melee_damage': { rifle: 165, shotgun: 164.7, pistol: 219.6, archgun: 99.9, melee: 164.7 },
     'electric_damage': { rifle: 90, shotgun: 90, pistol: 90, archgun: 119.7, melee: 90 },
     'heat_damage': { rifle: 90, shotgun: 90, pistol: 90, archgun: 119.7, melee: 90 },

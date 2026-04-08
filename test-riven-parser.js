@@ -7,6 +7,12 @@
 
 import { parseRivenData, validateRivenData } from './scripts/riven-parser.js';
 import { cleanOCRText } from './scripts/image-processor.js';
+import { isTrashRiven } from './scripts/search-queries.js';
+
+/** Build a minimal stat object for trash unit tests */
+function makeStat(url_name, type) {
+  return { type, matchedAttribute: { url_name } };
+}
 
 // Mock known weapons (complete list)
 const mockKnownWeapons = [
@@ -137,9 +143,6 @@ const mockKnownAttributes = [
   { effect: 'Critical Chance', url_name: 'critical_chance', positive_is_negative: false },
   { effect: 'Critical Damage', url_name: 'critical_damage', positive_is_negative: false },
   { effect: 'Base Damage / Melee Damage', url_name: 'base_damage_/_melee_damage', positive_is_negative: false },
-  { effect: 'Base Damage', url_name: 'base_damage', positive_is_negative: false },
-  { effect: 'Melee Damage', url_name: 'melee_damage', positive_is_negative: false },
-  { effect: 'Damage', url_name: 'damage', positive_is_negative: false },
   { effect: 'Critical Chance on Slide Attack', url_name: 'critical_chance_on_slide_attack', positive_is_negative: false },
   { effect: 'Combo Duration', url_name: 'combo_duration', positive_is_negative: false },
   { effect: 'Electric Damage', url_name: 'electric_damage', positive_is_negative: false },
@@ -171,6 +174,7 @@ const mockKnownAttributes = [
 const testCases = [
   {
     name: 'Opticor Visi-satipha with 3 positive and 1 negative stat',
+    expectedTrash: false,
     rawOCR: `Ts        LT TT Nam
  IS           ot
 -        4
@@ -198,7 +202,7 @@ WOLF NT`,
       weaponName: 'Opticor',
       stats: [
         { value: 107.1, name: 'Multishot', type: 'positive', matchedAttribute: 'multishot' },
-        { value: 189.8, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 189.8, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
         { value: 90.8, name: 'Heat', type: 'positive', matchedAttribute: 'heat_damage' },
         { value: 0.4, name: 'Damage to Infested', type: 'negative', matchedAttribute: 'damage_vs_infested' },
       ],
@@ -208,6 +212,7 @@ WOLF NT`,
   },
   {
     name: 'Lenz riven',
+    expectedTrash: false,
     rawOCR: `x             vv ww
 IS             Nd
 y T-        3
@@ -231,7 +236,7 @@ TAN`,
       stats: [
         { value: 191.5, name: 'Multishot', type: 'positive', matchedAttribute: 'multishot' },
         { value: 92.5, name: 'Heat', type: 'positive', matchedAttribute: 'heat_damage' },
-        { value: 174.1, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 174.1, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
         { value: 37.6, name: 'Reload Speed', type: 'negative', matchedAttribute: 'reload_speed' },
       ],
       mastery: 11,
@@ -240,6 +245,8 @@ TAN`,
   },
   {
     name: 'Acceltra riven',
+    // recoil and punch_through are NOT in goodAttributes → trash
+    expectedTrash: true,
     rawOCR: `rr -      -
 ro  W       a
 JAN
@@ -266,6 +273,8 @@ I
   },
   {
     name: 'Ballistica riven',
+    // "damage" and "fire_rate_/_attack_speed" NOT in goodAttributes → trash
+    expectedTrash: true,
     rawOCR: `A                f       C1
 Id
 y
@@ -287,7 +296,7 @@ TP Ear TW`,
     expected: {
       weaponName: 'Ballistica',
       stats: [
-        { value: 192.7, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 192.7, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
         { value: 92.3, name: 'Critical Damage', type: 'positive', matchedAttribute: 'critical_damage' },
         { value: 66.3, name: 'Fire Rate', type: 'positive', matchedAttribute: 'fire_rate_/_attack_speed' },
       ],
@@ -330,6 +339,7 @@ EE EEE`,
   },
   {
     name: 'Rubico riven',
+    expectedTrash: true,
     rawOCR: `Ld     I          v                  a TO
 AAW  % 4
 R C3  sa
@@ -347,7 +357,7 @@ Rubico Visi-argitis
       stats: [
         { value: 0.4, name: 'Damage to Grineer', type: 'positive', matchedAttribute: 'damage_vs_grineer' },
         { value: 98.3, name: 'Critical Damage', type: 'positive', matchedAttribute: 'critical_damage' },
-        { value: 158.4, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 158.4, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
         { value: -42.0, name: 'Zoom', type: 'negative', matchedAttribute: 'zoom' },
       ],
       mastery: undefined,
@@ -356,6 +366,7 @@ Rubico Visi-argitis
   },
   {
     name: 'Vasto riven',
+    expectedTrash: false,
     rawOCR: `- dw        18
                -
 t          .
@@ -376,7 +387,7 @@ NS Pr`,
       weaponName: 'Vasto',
       stats: [
         { value: 126.9, name: 'Electricity', type: 'positive', matchedAttribute: 'electric_damage' },
-        { value: 304.8, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 304.8, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
       ],
       mastery: 16,
       rolls: 20,
@@ -384,6 +395,7 @@ NS Pr`,
   },
   {
     name: 'Sobek riven',
+    expectedTrash: true,
     rawOCR: `REET Wh SI EE Gk
 Woof               .
 f    PRR
@@ -408,7 +420,7 @@ MR 14           O30`,
       stats: [
         { value: 92.8, name: 'Heat', type: 'positive', matchedAttribute: 'heat_damage' },
         { value: 48.2, name: 'Magazine Capacity', type: 'positive', matchedAttribute: 'magazine_capacity' },
-        { value: 174.3, name: 'Damage', type: 'positive', matchedAttribute: 'damage' },
+        { value: 174.3, name: 'Damage', type: 'positive', matchedAttribute: 'base_damage_/_melee_damage' },
       ],
       mastery: 14,
       rolls: 30,
@@ -586,6 +598,17 @@ testCases.forEach((testCase, index) => {
       }
     });
     
+    // Check trash status (integration: OCR parse → isTrashRiven)
+    if (testCase.expectedTrash !== undefined) {
+      const trashResult = isTrashRiven(result);
+      if (trashResult === testCase.expectedTrash) {
+        console.log(`✅ Trash status: ${trashResult}`);
+      } else {
+        console.log(`❌ Trash status: expected ${testCase.expectedTrash}, got ${trashResult}`);
+        testPassed = false;
+      }
+    }
+
     if (testPassed) {
       console.log('\n✅ Test passed');
       passed++;
@@ -601,14 +624,100 @@ testCases.forEach((testCase, index) => {
   }
 });
 
+// --- Trash Status Unit Tests ---
+
+const trashUnitTestCases = [
+  {
+    name: 'not trash — all positives in goodAttributes, no negative',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('multishot', 'positive')] },
+    expectedTrash: false,
+  },
+  {
+    name: 'not trash — all positives good, negative is reload_speed (not in badNegativeAttributes)',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('critical_damage', 'positive'), makeStat('reload_speed', 'negative')] },
+    expectedTrash: false,
+  },
+  {
+    name: 'not trash — good positives, negative is damage_vs_infested (not bad)',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('heat_damage', 'positive'), makeStat('damage_vs_infested', 'negative')] },
+    expectedTrash: false,
+  },
+  {
+    name: 'not trash — no stats at all',
+    data: { stats: [] },
+    expectedTrash: false,
+  },
+  {
+    name: 'trash — positive reload_speed is NOT in goodAttributes',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('reload_speed', 'positive')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — positive fire_rate_/_attack_speed is NOT in goodAttributes',
+    data: { stats: [makeStat('heat_damage', 'positive'), makeStat('fire_rate_/_attack_speed', 'positive')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative: critical_chance',
+    data: { stats: [makeStat('heat_damage', 'positive'), makeStat('multishot', 'positive'), makeStat('critical_chance', 'negative')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative: multishot',
+    data: { stats: [makeStat('heat_damage', 'positive'), makeStat('toxin_damage', 'positive'), makeStat('multishot', 'negative')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative: status_duration',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('status_duration', 'negative')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative: base_damage_/_melee_damage',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('toxin_damage', 'positive'), makeStat('base_damage_/_melee_damage', 'negative')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative: status_chance',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('status_chance', 'negative')] },
+    expectedTrash: true,
+  },
+  {
+    name: 'trash — bad negative even if all positives are good',
+    data: { stats: [makeStat('critical_chance', 'positive'), makeStat('critical_damage', 'positive'), makeStat('critical_damage', 'negative')] },
+    expectedTrash: true,
+  },
+];
+
+console.log('\n' + '='.repeat(60));
+console.log('\n🗑️  Running Trash Status Unit Tests\n');
+console.log('='.repeat(60));
+
+let trashPassed = 0;
+let trashFailed = 0;
+
+trashUnitTestCases.forEach((testCase, index) => {
+  const result = isTrashRiven(testCase.data);
+  if (result === testCase.expectedTrash) {
+    console.log(`✅ Trash ${index + 1}: ${testCase.name}`);
+    trashPassed++;
+  } else {
+    console.log(`❌ Trash ${index + 1}: ${testCase.name}`);
+    console.log(`   Expected: ${testCase.expectedTrash}, got: ${result}`);
+    trashFailed++;
+  }
+});
+
 // Summary
 console.log('\n' + '='.repeat(60));
-console.log(`\n📊 Test Summary: ${passed} passed, ${failed} failed out of ${testCases.length} tests`);
+console.log(`\n📊 OCR Parse Tests:   ${passed} passed, ${failed} failed out of ${testCases.length}`);
+console.log(`📊 Trash Unit Tests:  ${trashPassed} passed, ${trashFailed} failed out of ${trashUnitTestCases.length}`);
 
-if (failed === 0) {
+const totalFailed = failed + trashFailed;
+if (totalFailed === 0) {
   console.log('✅ All tests passed!\n');
   process.exit(0);
 } else {
-  console.log(`❌ ${failed} test(s) failed\n`);
+  console.log(`❌ ${totalFailed} test(s) failed\n`);
   process.exit(1);
 }

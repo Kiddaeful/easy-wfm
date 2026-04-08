@@ -1,7 +1,7 @@
 // Module for "New" tab
 import { createAuctionCell } from './auction-cell.js';
 import { parseRivenData, validateRivenData, generateRivenNames } from './riven-parser.js';
-import { generateSimilarRivenQueries, goodAttributes, badNegativeAttributes } from './search-queries.js';
+import { generateSimilarRivenQueries, isTrashRiven } from './search-queries.js';
 import { preprocessImage, getTesseractConfig, cleanOCRText } from './image-processor.js';
 
 // Tesseract worker instance
@@ -533,21 +533,6 @@ function renderRivenForm(data) {
     }
   };
   formContainer.appendChild(directSaleBtn);
-}
-
-/**
- * Returns true if a riven should be considered "trash" based on its attributes:
- * - Any positive attribute is not in the goodAttributes list, OR
- * - The negative attribute is in the badNegativeAttributes list
- * @param {Object} data - Riven data with stats array
- * @returns {boolean}
- */
-function isTrashRiven(data) {
-  const positiveStats = (data.stats || []).filter(s => s.type === 'positive' && s.matchedAttribute);
-  const negativeStats = (data.stats || []).filter(s => s.type === 'negative' && s.matchedAttribute);
-  const hasNonGoodPositive = positiveStats.some(s => !goodAttributes.includes(s.matchedAttribute.url_name));
-  const hasBadNegative = negativeStats.some(s => badNegativeAttributes.includes(s.matchedAttribute.url_name));
-  return hasNonGoodPositive || hasBadNegative;
 }
 
 /**
