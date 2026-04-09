@@ -1009,6 +1009,7 @@ function getFormDataFromDOM(formElement) {
 
   // Rolls
   let rollsValue = 0;
+  let isTrash = false;
   if (form.classList.contains('sale-mode')) {
       const rollsInput = form.querySelector('input[name="rerolls"]');
       rollsValue = rollsInput ? parseInt(rollsInput.value) : 0;
@@ -1016,6 +1017,7 @@ function getFormDataFromDOM(formElement) {
       const rollsInput = form.querySelector('input[type="checkbox"]');
       const unrolled = rollsInput ? rollsInput.checked : false;
       rollsValue = unrolled ? 0 : 1;
+      isTrash = unrolled;
   }
 
   // Sale Mode Fields
@@ -1036,6 +1038,7 @@ function getFormDataFromDOM(formElement) {
     stats: stats,
     mastery: mrValue,
     rolls: rollsValue,
+    isTrash: isTrash,
     rivenName: rivenName,
     price: price,
     polarity: polarity

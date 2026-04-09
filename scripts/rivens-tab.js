@@ -1,6 +1,6 @@
 // Module for "Rivens" tab
 import { createAuctionCell } from './auction-cell.js';
-import { generateSimilarRivenQueries, similarAttributes } from './search-queries.js';
+import { generateSimilarRivenQueries, isTrashRiven } from './search-queries.js';
 
 let knownWeapons = [];
 
@@ -88,15 +88,48 @@ export async function refreshRivensTab() {
         }
         
         filteredAuctions.forEach(auction => {
-            // We pass empty arrays for original attributes as we are not comparing
-            // Pass null for query
+            const auctionStats = (auction.item.attributes || []).map(attr => ({
+                type: attr.positive ? 'positive' : 'negative',
+                matchedAttribute: { url_name: attr.url_name }
+            }));
+            const auctionSearchData = { stats: auctionStats };
+            let currentIsTrash = isTrashRiven(auctionSearchData);
+
             const cell = createAuctionCell(auction, [], [], null, {
                 showUpdate: true,
                 showWeapon: true,
-                onUpdate: (a) => showUpdateView(a)
+                onUpdate: (a) => showUpdateView(a, currentIsTrash)
             });
-            
-            // Add status indicator if closed or private
+
+            // Trash checkbox — appended into rightDiv (bottom-right of the cell)
+            const trashLabel = document.createElement('label');
+            trashLabel.style.display = 'flex';
+            trashLabel.style.alignItems = 'center';
+            trashLabel.style.justifyContent = 'flex-end';
+            trashLabel.style.cursor = 'pointer';
+            trashLabel.style.gap = '5px';
+            trashLabel.style.fontSize = '11px';
+            trashLabel.style.color = '#9ca3af';
+            trashLabel.style.marginTop = '4px';
+
+            const trashCheckbox = document.createElement('input');
+            trashCheckbox.type = 'checkbox';
+            trashCheckbox.checked = currentIsTrash;
+            trashCheckbox.style.cursor = 'pointer';
+            trashCheckbox.addEventListener('change', () => {
+                currentIsTrash = trashCheckbox.checked;
+            });
+
+            const trashText = document.createElement('span');
+            trashText.textContent = 'trash';
+
+            trashLabel.appendChild(trashCheckbox);
+            trashLabel.appendChild(trashText);
+
+            // cell.lastChild is rightDiv (price + update button)
+            cell.lastChild.appendChild(trashLabel);
+
+            // Status indicator if closed or private
             if (auction.closed || auction.private || !auction.visible) {
                 const statusDiv = document.createElement('div');
                 statusDiv.style.fontSize = '12px';
@@ -114,7 +147,6 @@ export async function refreshRivensTab() {
                     statusDiv.style.color = '#6b7280';
                 }
                 
-                // Append to the infoDiv (first child of cell)
                 if (cell.firstChild) {
                     cell.firstChild.appendChild(statusDiv);
                 }
@@ -157,7 +189,7 @@ export async function refreshRivensTab() {
 /**
  * Shows the update view for a specific auction
  */
-async function showUpdateView(auction) {
+async function showUpdateView(auction, isTrash = false) {
     const container = document.getElementById('rivensTab');
     container.innerHTML = ''; // Clear list
 
@@ -217,13 +249,14 @@ async function showUpdateView(auction) {
 
     // Perform search
     await loadKnownWeapons(); // Ensure loaded
-    
+
     // Transform auction data to format expected by generateSimilarRivenQueries
     const searchData = {
         weaponName: auction.item.weapon_url_name,
         rolls: auction.item.re_rolls,
+        isTrash: isTrash,
         stats: auction.item.attributes.map(attr => ({
-            type: attr.positive ? 'positive' :  'negative',
+            type: attr.positive ? 'positive' : 'negative',
             matchedAttribute: { url_name: attr.url_name }
         }))
     };
@@ -390,13 +423,6 @@ function renderSimilarRivensForUpdate(results, container, originalAuction) {
   container.appendChild(title);
 
   // Extract original attributes for highlighting
-  // const originalPositiveAttrs = originalAuction.item.attributes
-  //   .filter(a => a.value > 0)
-  //   .map(a => a.url_name);
-  // const originalNegativeAttrs = originalAuction.item.attributes
-  //   .filter(a => a.value < 0)
-  //   .map(a => a.url_name);
-
   console.log('auction attributes', originalAuction.item.attributes);
   const originalPositiveAttrs = originalAuction.item.attributes
     .filter(s => s.positive === true)
@@ -413,11 +439,13 @@ function renderSimilarRivensForUpdate(results, container, originalAuction) {
       // Skip empty results if we have others
       if (res.auctions.length === 0 && results.some(r => r.auctions.length > 0)) return;
 
+      const count = res.auctions.length - res.auctions.filter(a => a.id === originalAuction.id).length;
+
       const section = document.createElement('div');
       section.style.marginBottom = '24px';
       
       const sectionTitle = document.createElement('h4');
-      sectionTitle.textContent = `${res.query._label} (${res.auctions.length} results)`;
+      sectionTitle.textContent = `${res.query._label} (${count} results)`;
       sectionTitle.style.color = '#667eea';
       sectionTitle.style.marginBottom = '8px';
       section.appendChild(sectionTitle);

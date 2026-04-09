@@ -59,7 +59,7 @@ export function generateSimilarRivenQueries(data, knownWeapons) {
 
   // Special case for Trash Rivens
   // If user selected "trash", we ignore attributes and search for cheapest price only
-  if (data.rolls === 0) {
+  if (data.isTrash) {
     return [{
       weapon_url_name: weapon.url_name,
       buyout_policy: 'direct',
