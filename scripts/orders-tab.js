@@ -38,7 +38,7 @@ async function runStayUpdatedLoop() {
  */
 function stopStayUpdated() {
   stayUpdatedActive = false;
-  window.WarframeAPI.requestQueue.removeByTag('stay-updated');
+  window.WarframeAPI.v2Queue.removeByTag('stay-updated');
 }
 
 /**

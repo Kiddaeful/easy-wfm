@@ -3,12 +3,17 @@
 const API_BASE_URL = 'https://api.warframe.market/v1';
 const API_V2_BASE_URL = 'https://api.warframe.market/v2';
 
-// Request Queue System
+// Request Queue System — sliding window rate limiter
 class RequestQueue {
-  constructor(maxRequestsPerSecond = 3) {
+  /**
+   * @param {number} maxRequests - Max requests allowed per window
+   * @param {number} windowMs   - Window duration in milliseconds
+   */
+  constructor(maxRequests = 3, windowMs = 1000) {
     this.queue = [];
-    this.maxRPS = maxRequestsPerSecond;
-    this.lastRequestTime = 0;
+    this.maxRequests = maxRequests;
+    this.windowMs = windowMs;
+    this.requestTimestamps = [];
     this.processing = false;
   }
 
@@ -27,26 +32,27 @@ class RequestQueue {
 
   async process() {
     if (this.processing || this.queue.length === 0) return;
-    
+
     this.processing = true;
-    
+
     while (this.queue.length > 0) {
       const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
-      const minDelay = 1000 / this.maxRPS;
-      
-      if (timeSinceLastRequest < minDelay) {
-        await new Promise(resolve => 
-          setTimeout(resolve, minDelay - timeSinceLastRequest)
-        );
+
+      // Evict timestamps outside the current window
+      this.requestTimestamps = this.requestTimestamps.filter(t => now - t < this.windowMs);
+
+      if (this.requestTimestamps.length >= this.maxRequests) {
+        // Wait until the oldest slot in the window expires
+        const waitMs = this.windowMs - (now - this.requestTimestamps[0]) + 1;
+        await new Promise(resolve => setTimeout(resolve, waitMs));
       }
 
       // Queue may have been emptied by removeByTag during the await above
       if (this.queue.length === 0) break;
 
       const { requestFn, resolve, reject } = this.queue.shift();
-      this.lastRequestTime = Date.now();
-      
+      this.requestTimestamps.push(Date.now());
+
       try {
         const result = await requestFn();
         resolve(result);
@@ -54,12 +60,15 @@ class RequestQueue {
         reject(error);
       }
     }
-    
+
     this.processing = false;
   }
 }
 
-const requestQueue = new RequestQueue(3);
+// V1: 3 requests per 10 seconds
+const v1Queue = new RequestQueue(1, 3_300);
+// V2: 3 requests per second
+const v2Queue = new RequestQueue(3, 1_000);
 
 /**
  * Checks for rate limiting and displays a toast if necessary
@@ -332,23 +341,25 @@ async function getUserInfo() {
  */
 async function getRivenItems() {
   try {
-    const language = await getLanguage();
-    const response = await fetch(`${API_BASE_URL}/riven/items`, {
-      method: 'GET',
-      credentials: 'omit',
-      headers: {
-        'Language': language
+    return await v1Queue.add(async () => {
+      const language = await getLanguage();
+      const response = await fetch(`${API_BASE_URL}/riven/items`, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: {
+          'Language': language
+        }
+      });
+
+      checkRateLimit(response);
+
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
       }
+
+      const data = await response.json();
+      return data.payload.items;
     });
-
-    checkRateLimit(response);
-
-    if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.payload.items;
   } catch (error) {
     console.error('Erreur lors de la récupération des items Riven:', error);
     return [];
@@ -361,23 +372,25 @@ async function getRivenItems() {
  */
 async function getRivenAttributes() {
   try {
-    const language = await getLanguage();
-    const response = await fetch(`${API_BASE_URL}/riven/attributes`, {
-      method: 'GET',
-      credentials: 'omit',
-      headers: {
-        'Language': language
+    return await v1Queue.add(async () => {
+      const language = await getLanguage();
+      const response = await fetch(`${API_BASE_URL}/riven/attributes`, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: {
+          'Language': language
+        }
+      });
+
+      checkRateLimit(response);
+
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
       }
+
+      const data = await response.json();
+      return data.payload.attributes;
     });
-
-    checkRateLimit(response);
-
-    if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.payload.attributes;
   } catch (error) {
     console.error('Erreur lors de la récupération des attributs Riven:', error);
     return [];
@@ -389,38 +402,40 @@ async function getRivenAttributes() {
  * @param {Object} params - Paramètres de recherche
  * @returns {Promise<Array>} Liste des enchères
  */
-async function searchAuctions(params) {
+async function searchAuctions(params, tag = null) {
   try {
-    // Construire les query params
-    const queryParams = new URLSearchParams();
-    
-    // Valeurs par défaut
-    if (!params.platform) params.platform = 'pc';
-    if (!params.buyout_policy) params.buyout_policy = 'direct'; // On préfère souvent les ventes directes par défaut
-    
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== null && value !== '') {
-        queryParams.append(key, value);
+    return await v1Queue.add(async () => {
+      // Construire les query params
+      const queryParams = new URLSearchParams();
+
+      // Valeurs par défaut
+      if (!params.platform) params.platform = 'pc';
+      if (!params.buyout_policy) params.buyout_policy = 'direct';
+
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') {
+          queryParams.append(key, value);
+        }
       }
-    }
 
-    const language = await getLanguage();
-    const response = await fetch(`${API_BASE_URL}/auctions/search?type=riven&${queryParams.toString()}`, {
-      method: 'GET',
-      credentials: 'omit',
-      headers: {
-        'Language': language
+      const language = await getLanguage();
+      const response = await fetch(`${API_BASE_URL}/auctions/search?type=riven&${queryParams.toString()}`, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: {
+          'Language': language
+        }
+      });
+
+      checkRateLimit(response);
+
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
       }
-    });
 
-    checkRateLimit(response);
-
-    if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.payload.auctions || [];
+      const data = await response.json();
+      return data.payload.auctions || [];
+    }, tag);
   } catch (error) {
     console.error('Erreur lors de la recherche d\'enchères:', error);
     return [];
@@ -488,23 +503,25 @@ async function closeAuction(auctionId) {
  */
 async function getProfileAuctions(slug) {
   try {
-    const language = await getLanguage();
-    const response = await fetch(`${API_BASE_URL}/profile/${slug}/auctions`, {
-      method: 'GET',
-      credentials: 'omit',
-      headers: {
-        'Language': language
+    return await v1Queue.add(async () => {
+      const language = await getLanguage();
+      const response = await fetch(`${API_BASE_URL}/profile/${slug}/auctions`, {
+        method: 'GET',
+        credentials: 'omit',
+        headers: {
+          'Language': language
+        }
+      });
+
+      checkRateLimit(response);
+
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
       }
+
+      const data = await response.json();
+      return data.payload.auctions || [];
     });
-
-    checkRateLimit(response);
-
-    if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.payload.auctions || [];
   } catch (error) {
     console.error('Erreur lors de la récupération des enchères du profil:', error);
     return [];
@@ -516,7 +533,7 @@ async function getProfileAuctions(slug) {
  * @returns {Promise<Array>} Liste des commandes
  */
 async function getUserOrders() {
-  return requestQueue.add(async () => {
+  return v2Queue.add(async () => {
     const response = await authenticatedRequest('/orders/my', {
       method: 'GET'
     }, API_V2_BASE_URL);
@@ -530,7 +547,7 @@ async function getUserOrders() {
  * @returns {Promise<Object>} Item information
  */
 async function getItemBySlug(slug) {
-  return requestQueue.add(async () => {
+  return v2Queue.add(async () => {
     const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/item/${slug}`, {
       method: 'GET',
@@ -557,7 +574,7 @@ async function getItemBySlug(slug) {
  * @returns {Promise<Object>} Updated order
  */
 async function updateOrder(orderId, platinum, tag = 'stay-updated') {
-  return requestQueue.add(async () => {
+  return v2Queue.add(async () => {
     return authenticatedRequest(`/order/${orderId}`, {
       method: 'PATCH',
       body: JSON.stringify({ platinum })
@@ -571,7 +588,7 @@ async function updateOrder(orderId, platinum, tag = 'stay-updated') {
  * @returns {Promise<Object>} Item orders
  */
 async function getItemOrders(slug) {
-  return requestQueue.add(async () => {
+  return v2Queue.add(async () => {
     const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/orders/item/${slug}`, {
       method: 'GET',
@@ -611,5 +628,6 @@ window.WarframeAPI = {
   getItemBySlug,
   getItemOrders,
   updateOrder,
-  requestQueue
+  v1Queue,
+  v2Queue
 };
