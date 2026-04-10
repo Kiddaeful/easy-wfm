@@ -7,7 +7,7 @@ chrome.action.onClicked.addListener((tab) => {
 
 // Gestion de l'installation de l'extension
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Riven reader extension installée avec succès');
+  console.log('Easy WF Market extension installée avec succès');
 });
 
 // Écouter les messages du sidepanel

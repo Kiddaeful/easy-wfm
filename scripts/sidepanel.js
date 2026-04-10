@@ -51,7 +51,7 @@ function getIconForType(type) {
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-  console.log('Riven reader sidepanel loaded');
+  console.log('Easy WF Market sidepanel loaded');
   
   // Check authentication status on load
   await checkAuthStatus();
