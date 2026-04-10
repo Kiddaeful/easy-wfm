@@ -244,7 +244,7 @@ async function showUpdateView(auction, isTrash = false) {
     similarContainer.id = 'similarRivensUpdateContainer';
     similarContainer.style.padding = '10px';
     similarContainer.style.borderTop = '1px solid #eee';
-    similarContainer.innerHTML = '<div style="text-align:center; padding: 20px;">Loading similar auctions... ⏳</div>';
+    similarContainer.innerHTML = '<div class="auction-loader"><div class="auction-loader__spinner"></div><span class="auction-loader__text">Loading similar auctions...</span></div>';
     container.appendChild(similarContainer);
 
     // Perform search

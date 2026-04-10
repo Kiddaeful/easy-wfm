@@ -740,3 +740,36 @@ footer {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
+
+.auction-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 20px;
+}
+
+.auction-loader__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: auction-spin 0.75s linear infinite;
+}
+
+.auction-loader__text {
+  font-size: 13px;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+  animation: auction-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes auction-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes auction-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
