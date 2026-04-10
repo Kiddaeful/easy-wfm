@@ -30,6 +30,22 @@ class RequestQueue {
     toRemove.forEach(({ reject }) => reject(new Error('Cancelled')));
   }
 
+  /**
+   * Returns the current state of the queue and rate limiter.
+   * @returns {{ used: number, max: number, pending: number, rateLimited: boolean, resetInMs: number }}
+   */
+  getStatus() {
+    const now = Date.now();
+    const active = this.requestTimestamps.filter(t => now - t < this.windowMs);
+    const used = active.length;
+    const rateLimited = used >= this.maxRequests;
+    const pending = this.queue.length;
+    const resetInMs = rateLimited && active.length > 0
+      ? Math.max(0, this.windowMs - (now - active[0]) + 1)
+      : 0;
+    return { used, max: this.maxRequests, pending, rateLimited, resetInMs };
+  }
+
   async process() {
     if (this.processing || this.queue.length === 0) return;
 
@@ -66,9 +82,9 @@ class RequestQueue {
 }
 
 // V1: 3 requests per 10 seconds
-const v1Queue = new RequestQueue(1, 3_300);
+const auctionQueue = new RequestQueue(10, 60_000);
 // V2: 3 requests per second
-const v2Queue = new RequestQueue(3, 1_000);
+const apiQueue = new RequestQueue(3, 1_000);
 
 /**
  * Checks for rate limiting and displays a toast if necessary
@@ -341,7 +357,7 @@ async function getUserInfo() {
  */
 async function getRivenItems() {
   try {
-    return await v1Queue.add(async () => {
+    return await apiQueue.add(async () => {
       const language = await getLanguage();
       const response = await fetch(`${API_BASE_URL}/riven/items`, {
         method: 'GET',
@@ -372,7 +388,7 @@ async function getRivenItems() {
  */
 async function getRivenAttributes() {
   try {
-    return await v1Queue.add(async () => {
+    return await apiQueue.add(async () => {
       const language = await getLanguage();
       const response = await fetch(`${API_BASE_URL}/riven/attributes`, {
         method: 'GET',
@@ -404,7 +420,7 @@ async function getRivenAttributes() {
  */
 async function searchAuctions(params, tag = null) {
   try {
-    return await v1Queue.add(async () => {
+    return await auctionQueue.add(async () => {
       // Construire les query params
       const queryParams = new URLSearchParams();
 
@@ -503,7 +519,7 @@ async function closeAuction(auctionId) {
  */
 async function getProfileAuctions(slug) {
   try {
-    return await v1Queue.add(async () => {
+    return await apiQueue.add(async () => {
       const language = await getLanguage();
       const response = await fetch(`${API_BASE_URL}/profile/${slug}/auctions`, {
         method: 'GET',
@@ -533,7 +549,7 @@ async function getProfileAuctions(slug) {
  * @returns {Promise<Array>} Liste des commandes
  */
 async function getUserOrders() {
-  return v2Queue.add(async () => {
+  return apiQueue.add(async () => {
     const response = await authenticatedRequest('/orders/my', {
       method: 'GET'
     }, API_V2_BASE_URL);
@@ -547,7 +563,7 @@ async function getUserOrders() {
  * @returns {Promise<Object>} Item information
  */
 async function getItemBySlug(slug) {
-  return v2Queue.add(async () => {
+  return apiQueue.add(async () => {
     const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/item/${slug}`, {
       method: 'GET',
@@ -574,7 +590,7 @@ async function getItemBySlug(slug) {
  * @returns {Promise<Object>} Updated order
  */
 async function updateOrder(orderId, platinum, tag = 'stay-updated') {
-  return v2Queue.add(async () => {
+  return apiQueue.add(async () => {
     return authenticatedRequest(`/order/${orderId}`, {
       method: 'PATCH',
       body: JSON.stringify({ platinum })
@@ -588,7 +604,7 @@ async function updateOrder(orderId, platinum, tag = 'stay-updated') {
  * @returns {Promise<Object>} Item orders
  */
 async function getItemOrders(slug) {
-  return v2Queue.add(async () => {
+  return apiQueue.add(async () => {
     const [token, language] = await Promise.all([getAuthToken(), getLanguage()]);
     const response = await fetch(`${API_V2_BASE_URL}/orders/item/${slug}`, {
       method: 'GET',
@@ -628,6 +644,6 @@ window.WarframeAPI = {
   getItemBySlug,
   getItemOrders,
   updateOrder,
-  v1Queue,
-  v2Queue
+  auctionQueue,
+  apiQueue
 };

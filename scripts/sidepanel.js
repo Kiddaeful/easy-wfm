@@ -69,7 +69,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Tab handlers
   initTabs();
+
+  // Rate limit indicator
+  initRateIndicator();
 });
+
+/**
+ * Starts the rate limit indicator polling loop (500ms refresh).
+ */
+function initRateIndicator() {
+  updateRateIndicator();
+  setInterval(updateRateIndicator, 500);
+}
+
+/**
+ * Updates the auction queue rate limit indicator in the footer.
+ */
+function updateRateIndicator() {
+  const dot = document.getElementById('rateDot');
+  const text = document.getElementById('rateText');
+  if (!dot || !text) return;
+
+  const { used, max, pending, rateLimited, resetInMs } = window.WarframeAPI.auctionQueue.getStatus();
+
+  dot.className = 'rate-dot';
+  if (rateLimited || pending > 0) {
+    dot.classList.add('limited');
+  } else if (used >= Math.ceil(max * 0.7)) {
+    dot.classList.add('warning');
+  }
+
+  let label = `Auction API: ${used}/${max}`;
+  if (pending > 0) {
+    label += ` · ${pending} queued`;
+  }
+  if (rateLimited && resetInMs > 0) {
+    const secs = Math.ceil(resetInMs / 1000);
+    label += ` · resets in ${secs}s`;
+  }
+  text.textContent = label;
+}
 
 /**
  * Initializes the language selector with the saved value and listens for changes

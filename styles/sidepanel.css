@@ -693,8 +693,50 @@ main {
 
 footer {
   background: rgba(255, 255, 255, 0.9);
-  padding: 15px;
-  text-align: center;
+  padding: 10px 15px;
   font-size: 12px;
   color: #666;
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.footer-content p {
+  margin: 0;
+}
+
+.rate-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.rate-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  transition: background 0.3s ease;
+}
+
+.rate-dot.warning {
+  background: #f59e0b;
+}
+
+.rate-dot.limited {
+  background: #ef4444;
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
